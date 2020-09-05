@@ -4,13 +4,13 @@
 // #![allow(deprecated)] // TODO: remove
 
 mod backend;
-// mod painter;
+mod painter;
 pub mod storage;
 
 use winit::{dpi, event::VirtualKeyCode, event_loop::ControlFlow, window};
 
 pub use backend::*;
-// pub use painter::Painter;
+pub use painter::Painter;
 
 use {
     clipboard::ClipboardProvider,

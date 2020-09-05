@@ -1,5 +1,5 @@
 use futures::executor;
-use std::time::Instant;
+use std::{iter, time::Instant};
 
 use crate::{
     storage::{FileStorage, WindowSettings},
@@ -84,6 +84,16 @@ pub fn run(
     ))
     .unwrap();
 
+    let size = window.inner_size();
+    let mut sc_desc = wgpu::SwapChainDescriptor {
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        format: wgpu::TextureFormat::Bgra8Unorm,
+        width: size.width as u32,
+        height: size.height as u32,
+        present_mode: wgpu::PresentMode::Mailbox,
+    };
+    let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
+
     if let Some(window_settings) = &window_settings {
         window_settings.restore_positions(&window);
     }
@@ -91,7 +101,7 @@ pub fn run(
     let mut ctx = egui::Context::new();
     *ctx.memory() = egui::app::get_value(&storage, EGUI_MEMORY_KEY).unwrap_or_default();
 
-    // let mut painter = Painter::new(&display);
+    let mut painter = Painter::new(&device, sc_desc.format);
     let mut raw_input = make_raw_input(&window);
 
     // used to keep track of time for animations
@@ -115,7 +125,36 @@ pub fn run(
                 let frame_time = (Instant::now() - egui_start).as_secs_f64() as f32;
                 runner.frame_times.add(raw_input.time, frame_time);
 
-                //             painter.paint_jobs(&display, paint_jobs, ctx.texture());
+                let frame = match swap_chain.get_current_frame() {
+                    Ok(frame) => frame,
+                    Err(e) => {
+                        eprintln!("Dropped frame with error: {}", e);
+                        return;
+                    }
+                };
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some(concat!(file!(), "::encoder")),
+                });
+                {
+                    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                            attachment: &frame.output.view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color {
+                                    r: 0.0,
+                                    g: 0.5,
+                                    b: 1.0,
+                                    a: 1.0,
+                                }),
+                                store: true,
+                            },
+                        }],
+                        depth_stencil_attachment: None,
+                    });
+                    // painter.paint_jobs(&device, paint_jobs, ctx.texture());
+                }
+                queue.submit(iter::once(encoder.finish()));
 
                 if runner.quit {
                     *control_flow = winit::event_loop::ControlFlow::Exit
@@ -126,6 +165,11 @@ pub fn run(
                 handle_output(output, &window, clipboard.as_mut());
             }
             winit::event::Event::WindowEvent { event, .. } => {
+                if let winit::event::WindowEvent::Resized(size) = event {
+                    sc_desc.width = size.width;
+                    sc_desc.height = size.height;
+                    swap_chain = device.create_swap_chain(&surface, &sc_desc);
+                }
                 input_to_egui(event, clipboard.as_mut(), &mut raw_input, control_flow);
                 window.request_redraw(); // TODO: maybe only on some events?
             }

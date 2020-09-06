@@ -196,12 +196,14 @@ impl Painter {
     pub fn paint_jobs<'r>(
         &'r mut self,
         jobs: PaintJobs,
-        window_size: winit::dpi::LogicalSize<f32>,
+        physical_size: winit::dpi::PhysicalSize<f32>,
+        scale_factor: f64,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         rpass: &mut wgpu::RenderPass<'r>,
         texture: &egui::Texture,
     ) {
+        let logical_size = physical_size.to_logical(scale_factor);
         self.upload_texture(device, queue, texture);
         let textures_bind_group = match self.current_texture.as_ref() {
             Some((_, bg)) => bg,
@@ -212,7 +214,7 @@ impl Painter {
             &self.uniform_buffer,
             0,
             bytemuck::bytes_of(&Uniform {
-                screen_size: [window_size.width, window_size.height],
+                screen_size: [logical_size.width, logical_size.height],
                 tex_size: [texture.width as f32, texture.height as f32],
             }),
         );
@@ -246,11 +248,12 @@ impl Painter {
         {
             let clip_width = clip_rect.max.x - clip_rect.min.x;
             let clip_height = clip_rect.max.y - clip_rect.min.y;
+            let scale = scale_factor as f32;
             rpass.set_scissor_rect(
-                clip_rect.min.x as _,
-                clip_rect.min.y as _,
-                clip_width as _,
-                clip_height as _,
+                (scale * clip_rect.min.x) as _,
+                (scale * clip_rect.min.y) as _,
+                (scale * clip_width) as _,
+                (scale * clip_height) as _,
             );
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
             rpass.set_index_buffer(index_buffer.slice(..));
@@ -259,101 +262,6 @@ impl Painter {
             rpass.draw_indexed(0..triangles.indices.len() as _, 0, 0..1)
         }
     }
-
-    // #[inline(never)] // Easier profiling
-    // fn paint_job(
-    //     &mut self,
-    //     target: &mut Frame,
-    //     display: &glium::Display,
-    //     clip_rect: Rect,
-    //     triangles: &Triangles,
-    //     texture: &egui::Texture,
-    // ) {
-    //     debug_assert!(triangles.is_valid());
-
-    //     let vertex_buffer = {
-    //         #[derive(Copy, Clone)]
-    //         struct Vertex {
-    //             a_pos: [f32; 2],
-    //             a_srgba: [u8; 4],
-    //             a_tc: [u16; 2],
-    //         }
-    //         implement_vertex!(Vertex, a_pos, a_srgba, a_tc);
-
-    //         let vertices: Vec<Vertex> = triangles
-    //             .vertices
-    //             .iter()
-    //             .map(|v| Vertex {
-    //                 a_pos: [v.pos.x, v.pos.y],
-    //                 a_srgba: [v.color.r, v.color.g, v.color.b, v.color.a],
-    //                 a_tc: [v.uv.0, v.uv.1],
-    //             })
-    //             .collect();
-
-    //         glium::VertexBuffer::new(display, &vertices).unwrap()
-    //     };
-
-    //     let indices: Vec<u32> = triangles.indices.iter().map(|idx| *idx as u32).collect();
-
-    //     let index_buffer =
-    //         glium::IndexBuffer::new(display, PrimitiveType::TrianglesList, &indices).unwrap();
-
-    //     let pixels_per_point = display.gl_window().window().scale_factor() as f32;
-    //     let (width_pixels, height_pixels) = display.get_framebuffer_dimensions();
-    //     let width_points = width_pixels as f32 / pixels_per_point;
-    //     let height_points = height_pixels as f32 / pixels_per_point;
-
-    //     let uniforms = uniform! {
-    //         u_screen_size: [width_points, height_points],
-    //         u_tex_size: [texture.width as f32, texture.height as f32],
-    //         u_sampler: &self.texture,
-    //     };
-
-    //     // Emilib outputs colors with premultiplied alpha:
-    //     let blend_func = glium::BlendingFunction::Addition {
-    //         source: glium::LinearBlendingFactor::One,
-    //         destination: glium::LinearBlendingFactor::OneMinusSourceAlpha,
-    //     };
-    //     let blend = glium::Blend {
-    //         color: blend_func,
-    //         alpha: blend_func,
-    //         ..Default::default()
-    //     };
-
-    //     let clip_min_x = pixels_per_point * clip_rect.min.x;
-    //     let clip_min_y = pixels_per_point * clip_rect.min.y;
-    //     let clip_max_x = pixels_per_point * clip_rect.max.x;
-    //     let clip_max_y = pixels_per_point * clip_rect.max.y;
-    //     let clip_min_x = clamp(clip_min_x, 0.0..=width_pixels as f32);
-    //     let clip_min_y = clamp(clip_min_y, 0.0..=height_pixels as f32);
-    //     let clip_max_x = clamp(clip_max_x, clip_min_x..=width_pixels as f32);
-    //     let clip_max_y = clamp(clip_max_y, clip_min_y..=height_pixels as f32);
-    //     let clip_min_x = clip_min_x.round() as u32;
-    //     let clip_min_y = clip_min_y.round() as u32;
-    //     let clip_max_x = clip_max_x.round() as u32;
-    //     let clip_max_y = clip_max_y.round() as u32;
-
-    //     let params = glium::DrawParameters {
-    //         blend,
-    //         scissor: Some(glium::Rect {
-    //             left: clip_min_x,
-    //             bottom: height_pixels - clip_max_y,
-    //             width: clip_max_x - clip_min_x,
-    //             height: clip_max_y - clip_min_y,
-    //         }),
-    //         ..Default::default()
-    //     };
-
-    //     target
-    //         .draw(
-    //             &vertex_buffer,
-    //             &index_buffer,
-    //             &self.program,
-    //             &uniforms,
-    //             &params,
-    //         )
-    //         .unwrap();
-    // }
 }
 
 #[repr(transparent)]

@@ -20,7 +20,8 @@ pub struct Painter {
     index_buffers: Vec<wgpu::Buffer>,
     uniform_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    current_texture_id: Option<u64>,
+    texture_bind_group_layout: wgpu::BindGroupLayout,
+    current_texture: Option<(u64, wgpu::BindGroup)>,
 }
 
 impl Painter {
@@ -34,27 +35,31 @@ impl Painter {
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false, min_binding_size: None },
                     visibility: wgpu::ShaderStage::VERTEX,
                 },
-                // wgpu::BindGroupLayoutEntry {
-                //     binding: 1,
-                //     count: None,
-                //     ty: wgpu::BindingType::SampledTexture {
-                //         component_type: wgpu::TextureComponentType::Float,
-                //         dimension: wgpu::TextureViewDimension::D2,
-                //         multisampled: false,
-                //     },
-                //     visibility: wgpu::ShaderStage::FRAGMENT,
-                // },
-                // wgpu::BindGroupLayoutEntry {
-                //     binding: 2,
-                //     count: None,
-                //     ty: wgpu::BindingType::Sampler { comparison: false },
-                //     visibility: wgpu::ShaderStage::FRAGMENT,
-                // },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    count: None,
+                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                },
             ],
         });
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(concat!(file!(), "::bind_group_layout")),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    count: None,
+                    ty: wgpu::BindingType::SampledTexture {
+                        component_type: wgpu::TextureComponentType::Float,
+                        dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                }],
+            });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(concat!(file!(), "::pipeline_layout")),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout, &texture_bind_group_layout],
             push_constant_ranges: &[],
         });
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -101,10 +106,6 @@ impl Painter {
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         });
-        // let format = texture::UncompressedFloatFormat::U8;
-        // let mipmaps = texture::MipmapsOption::NoMipmap;
-        // let texture =
-        //     texture::texture2d::Texture2d::with_format(facade, pixels, format, mipmaps).unwrap();
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some(concat!(file!(), "::uniform_buffer")),
@@ -112,22 +113,20 @@ impl Painter {
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
-        // let texture = device.create_texture(&wgpu::TextureDescriptor{
-        //     label: Some(concat!(file!(), "::texture")),
-        //     size: ,
-        //     mip_level_count: (),
-        //     sample_count: (),
-        //     dimension: (),
-        //     format: (),
-        //     usage: wgpu::TextureUsage::SAMPLED,
-        // });
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(concat!(file!(), "::bind_group")),
             layout: &bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(uniform_buffer.slice(..)),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(uniform_buffer.slice(..)),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
         });
         Painter {
             pipeline,
@@ -135,7 +134,8 @@ impl Painter {
             index_buffers: Vec::new(),
             uniform_buffer,
             bind_group,
-            current_texture_id: None,
+            texture_bind_group_layout,
+            current_texture: None,
         }
     }
 
@@ -145,8 +145,11 @@ impl Painter {
         queue: &wgpu::Queue,
         texture: &egui::Texture,
     ) {
-        if self.current_texture_id == Some(texture.id) {
-            return; // No change
+        {
+            match self.current_texture.as_ref() {
+                Some(&(id, _)) if id == texture.id => return,
+                _ => (),
+            };
         }
 
         let size =
@@ -159,13 +162,13 @@ impl Painter {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8Unorm,
-            usage: wgpu::TextureUsage::SAMPLED,
+            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
         });
 
         queue.write_texture(
             wgpu::TextureCopyView {
                 texture: &gpu_texture,
-                mip_level: 1,
+                mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
             texture.pixels.as_slice(),
@@ -177,17 +180,17 @@ impl Painter {
             size,
         );
 
-        //     let pixels: Vec<Vec<u8>> = texture
-        //         .pixels
-        //         .chunks(texture.width as usize)
-        //         .map(|row| row.to_vec())
-        //         .collect();
-
-        //     let format = texture::UncompressedFloatFormat::U8;
-        //     let mipmaps = texture::MipmapsOption::NoMipmap;
-        //     self.texture =
-        //         texture::texture2d::Texture2d::with_format(facade, pixels, format, mipmaps).unwrap();
-        self.current_texture_id = Some(texture.id);
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(concat!(file!(), "::bind_group")),
+            layout: &self.texture_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(
+                    &gpu_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                ),
+            }],
+        });
+        self.current_texture = Some((texture.id, bind_group));
     }
 
     pub fn paint_jobs<'r>(
@@ -199,7 +202,11 @@ impl Painter {
         rpass: &mut wgpu::RenderPass<'r>,
         texture: &egui::Texture,
     ) {
-        // self.upload_texture(texture);
+        self.upload_texture(device, queue, texture);
+        let textures_bind_group = match self.current_texture.as_ref() {
+            Some((_, bg)) => bg,
+            _ => unreachable!(),
+        };
 
         queue.write_buffer(
             &self.uniform_buffer,
@@ -237,9 +244,18 @@ impl Painter {
         for (((clip_rect, triangles), vertex_buffer), index_buffer) in
             jobs.iter().zip(self.vertex_buffers.iter()).zip(self.index_buffers.iter())
         {
+            let clip_width = clip_rect.max.x - clip_rect.min.x;
+            let clip_height = clip_rect.max.y - clip_rect.min.y;
+            rpass.set_scissor_rect(
+                clip_rect.min.x as _,
+                clip_rect.min.y as _,
+                clip_width as _,
+                clip_height as _,
+            );
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
             rpass.set_index_buffer(index_buffer.slice(..));
             rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.set_bind_group(1, &textures_bind_group, &[]);
             rpass.draw_indexed(0..triangles.indices.len() as _, 0, 0..1)
         }
     }

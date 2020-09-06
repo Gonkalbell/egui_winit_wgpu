@@ -5,8 +5,8 @@ layout(set = 0, binding = 0) uniform Sizes {
     vec2 u_tex_size;
 };
 layout(location = 0) in vec2 a_pos;
-layout(location = 1) in vec4 a_srgba;
-layout(location = 2) in vec2 a_tc;
+layout(location = 1) in uvec2 a_tc;
+layout(location = 2) in uvec4 a_srgba;
 layout(location = 0) out vec4 v_rgba;
 layout(location = 1) out vec2 v_tc;
 

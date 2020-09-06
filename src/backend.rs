@@ -152,7 +152,8 @@ pub fn run(
                         }],
                         depth_stencil_attachment: None,
                     });
-                    // painter.paint_jobs(&device, paint_jobs, ctx.texture());
+                    let logical_size = window.inner_size().to_logical(window.scale_factor());
+                    painter.paint_jobs(paint_jobs, logical_size, &device, &queue, &mut rpass, ctx.texture());
                 }
                 queue.submit(iter::once(encoder.finish()));
 

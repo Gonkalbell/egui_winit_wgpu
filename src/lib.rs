@@ -15,7 +15,6 @@ pub use painter::Painter;
 use {
     clipboard::ClipboardProvider,
     egui::*,
-    //     glium::glutin::{self, event::VirtualKeyCode, event_loop::ControlFlow},
 };
 
 pub use clipboard::ClipboardContext; // TODO: remove
@@ -106,12 +105,12 @@ pub fn input_to_egui(
             }
         }
         _ => {
-            dbg!(event);
+            // dbg!(event);
         }
     }
 }
 
-/// Glium sends special keys (backspace, delete, F1, ...) as characters.
+/// Winit sends special keys (backspace, delete, F1, ...) as characters.
 /// Ignore those.
 /// We also ignore '\r', '\n', '\t'.
 /// Newlines are handled by the `Key::Enter` event.

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 // ----------------------------------------------------------------------------
 
 /// A key-value store backed by a JSON file on disk.
-/// Used to restore egui state, glium window position/size and app state.
+/// Used to restore egui state, wgpu window position/size and app state.
 pub struct FileStorage {
     path: String,
     kv: HashMap<String, String>,

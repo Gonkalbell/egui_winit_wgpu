@@ -2,9 +2,7 @@
 
 use {
     egui::{
-        math::clamp,
-        paint::{PaintJobs, Triangles, Vertex},
-        Rect,
+        paint::{PaintJobs, Vertex},
     },
     std::{borrow::Cow, mem, slice},
     vk_shader_macros as spv,
@@ -82,13 +80,13 @@ impl Painter {
             color_states: &[wgpu::ColorStateDescriptor {
                 format: output_format,
                 color_blend: wgpu::BlendDescriptor {
-                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    src_factor: wgpu::BlendFactor::One,
                     dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                     operation: wgpu::BlendOperation::Add,
                 },
                 alpha_blend: wgpu::BlendDescriptor {
-                    src_factor: wgpu::BlendFactor::OneMinusDstAlpha,
-                    dst_factor: wgpu::BlendFactor::One,
+                    src_factor: wgpu::BlendFactor::One,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                     operation: wgpu::BlendOperation::Add,
                 },
                 write_mask: wgpu::ColorWrite::ALL,
@@ -223,7 +221,9 @@ impl Painter {
         self.index_buffers.clear();
 
         rpass.set_pipeline(&self.pipeline);
-        for (clip_rect, triangles) in jobs.iter() {
+        rpass.set_bind_group(0, &self.bind_group, &[]);
+        rpass.set_bind_group(1, &textures_bind_group, &[]);
+        for (_, triangles) in jobs.iter() {
             // Safety: VertexPod is a transparent wrapper over Vertex, which _should_ already be a POD type
             let vertex_pods = unsafe {
                 slice::from_raw_parts(
@@ -257,8 +257,6 @@ impl Painter {
             );
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
             rpass.set_index_buffer(index_buffer.slice(..));
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_bind_group(1, &textures_bind_group, &[]);
             rpass.draw_indexed(0..triangles.indices.len() as _, 0, 0..1)
         }
     }

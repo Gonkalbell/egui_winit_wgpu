@@ -74,7 +74,7 @@ pub fn run(
     }))
     .unwrap();
 
-    let (device, mut queue) = executor::block_on(adapter.request_device(
+    let (device, queue) = executor::block_on(adapter.request_device(
         &wgpu::DeviceDescriptor {
             features: wgpu::Features::empty(),
             limits: wgpu::Limits::default(),
@@ -108,6 +108,7 @@ pub fn run(
     let start_time = Instant::now();
     let mut runner = WGpuBackend::new(run_mode);
     let mut clipboard = init_clipboard();
+    let mut modifier_state = winit::event::ModifiersState::empty();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = winit::event_loop::ControlFlow::Wait;
@@ -178,7 +179,7 @@ pub fn run(
                     sc_desc.height = size.height;
                     swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 }
-                input_to_egui(event, clipboard.as_mut(), &mut raw_input, control_flow);
+                input_to_egui(event, clipboard.as_mut(), &mut raw_input, control_flow, &mut modifier_state);
                 window.request_redraw(); // TODO: maybe only on some events?
             }
             winit::event::Event::LoopDestroyed => {

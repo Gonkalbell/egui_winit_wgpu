@@ -7,15 +7,17 @@ mod backend;
 mod painter;
 pub mod storage;
 
-use winit::{dpi, event::VirtualKeyCode, event_loop::ControlFlow, window};
+use winit::{
+    dpi,
+    event::{ModifiersState, VirtualKeyCode},
+    event_loop::ControlFlow,
+    window,
+};
 
 pub use backend::*;
 pub use painter::Painter;
 
-use {
-    clipboard::ClipboardProvider,
-    egui::*,
-};
+use {clipboard::ClipboardProvider, egui::*};
 
 pub use clipboard::ClipboardContext; // TODO: remove
 
@@ -24,6 +26,7 @@ pub fn input_to_egui(
     clipboard: Option<&mut ClipboardContext>,
     raw_input: &mut RawInput,
     control_flow: &mut ControlFlow,
+    modifier_state: &mut ModifiersState,
 ) {
     use winit::event::WindowEvent::*;
     match event {
@@ -59,10 +62,10 @@ pub fn input_to_egui(
                 raw_input.events.push(Event::Text(ch.to_string()));
             }
         }
+        ModifiersChanged(input) => *modifier_state = input,
         KeyboardInput { input, .. } => {
             if let Some(virtual_keycode) = input.virtual_keycode {
-                // TODO: If mac
-                if input.modifiers.logo() && virtual_keycode == VirtualKeyCode::Q {
+                if modifier_state.logo() && virtual_keycode == VirtualKeyCode::Q {
                     *control_flow = ControlFlow::Exit;
                 }
 

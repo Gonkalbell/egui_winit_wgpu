@@ -69,7 +69,7 @@ pub fn run(
     let surface = unsafe { instance.create_surface(&window) };
 
     let adapter = executor::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
+        power_preference: wgpu::PowerPreference::Default,
         compatible_surface: Some(&surface),
     }))
     .unwrap();
@@ -114,7 +114,7 @@ pub fn run(
         *control_flow = winit::event_loop::ControlFlow::Wait;
 
         match event {
-            winit::event::Event::RedrawRequested(_) => {
+            winit::event::Event::RedrawEventsCleared => {
                 let egui_start = Instant::now();
                 raw_input.time = start_time.elapsed().as_nanos() as f64 * 1e-9;
                 raw_input.seconds_since_midnight = Some(local_time_of_day());
@@ -165,11 +165,17 @@ pub fn run(
                 }
                 queue.submit(iter::once(encoder.finish()));
 
-                if runner.quit {
-                    *control_flow = winit::event_loop::ControlFlow::Exit
-                } else if runner.run_mode() == RunMode::Continuous || output.needs_repaint {
+                *control_flow = if runner.quit {
+                    winit::event_loop::ControlFlow::Exit
+                } else if runner.run_mode() == RunMode::Continuous {
                     window.request_redraw();
-                }
+                    winit::event_loop::ControlFlow::Poll
+                } else {
+                    if output.needs_repaint {
+                        window.request_redraw();
+                    }
+                    winit::event_loop::ControlFlow::Wait
+                };
 
                 handle_output(output, &window, clipboard.as_mut());
             }
@@ -179,7 +185,13 @@ pub fn run(
                     sc_desc.height = size.height;
                     swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 }
-                input_to_egui(event, clipboard.as_mut(), &mut raw_input, control_flow, &mut modifier_state);
+                input_to_egui(
+                    event,
+                    clipboard.as_mut(),
+                    &mut raw_input,
+                    control_flow,
+                    &mut modifier_state,
+                );
                 window.request_redraw(); // TODO: maybe only on some events?
             }
             winit::event::Event::LoopDestroyed => {

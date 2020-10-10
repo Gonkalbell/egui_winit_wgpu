@@ -5,12 +5,12 @@ use {
         paint::{PaintJobs, Vertex},
     },
     std::{borrow::Cow, mem, slice},
-    vk_shader_macros as spv,
+    inline_spirv as spv,
     wgpu::util::{self, DeviceExt},
 };
 
-const VERT_SHADER: &[u32] = spv::include_glsl!("src/shaders/egui.vert");
-const FRAG_SHADER: &[u32] = spv::include_glsl!("src/shaders/egui.frag");
+const VERT_SHADER: &[u32] = spv::include_spirv!("src/shaders/egui.vert", vert);
+const FRAG_SHADER: &[u32] = spv::include_spirv!("src/shaders/egui.frag", frag);
 
 pub struct Painter {
     pipeline: wgpu::RenderPipeline,

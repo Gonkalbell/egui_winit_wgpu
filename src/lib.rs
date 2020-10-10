@@ -1,7 +1,5 @@
-// #![deny(warnings)]
 #![warn(clippy::all)]
 #![allow(clippy::single_match)]
-// #![allow(deprecated)] // TODO: remove
 
 mod backend;
 mod painter;

@@ -1,5 +1,5 @@
 [package]
-name = "egui_wgpu"
+name = "egui_winit_wgpu"
 version = "0.1.0"
 authors = ["John Michael Bell <johnmichaelbell@gmail.com>"]
 edition = "2018"
